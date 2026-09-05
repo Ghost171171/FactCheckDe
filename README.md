@@ -1,1 +1,7 @@
-ffmpeg is required for usage (mlx-whisper is dependent on the installation of ffmpeg)
+## Voraussetzungen
+
+- **FFmpeg** (wird von `mlx-whisper` für das Audio-Decoding benötigt)
+
+### Installation (macOS)
+```bash
+brew install ffmpeg
