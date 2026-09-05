@@ -22,3 +22,6 @@ build/
 # OS-spezifisch
 .DS_Store
 Thumbs.db
+
+# Programm
+src/sample
