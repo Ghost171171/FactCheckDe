@@ -1,0 +1,24 @@
+# Virtuelle Umgebung
+.venv/
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Umgebungsvariablen (API-Keys!)
+.env
+
+# IDE (PyCharm)
+.idea/
+
+# Build/Distribution
+*.egg-info/
+dist/
+build/
+
+# OS-spezifisch
+.DS_Store
+Thumbs.db
