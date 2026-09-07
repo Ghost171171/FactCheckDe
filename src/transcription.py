@@ -12,10 +12,6 @@ import soundfile as sf
 # CONSTANTS
 TEXT_DIR = Path(__file__).parent / "sample" / "text"
 AUDIO_DIR = Path(__file__).parent / "sample" / "audio"
-NAMES = ["", "Staiy", "Meme", "Friedrich Merz", "", "", "", "", "", "", ""]
-SPEAKER_MAPPING = {
-    f"SPEAKER_{i}": f"{NAMES[i]}" for i in range(1, 11)
-}
 
 # load speechbrain encoder on first boot
 print("--> Lade SpeechBrain Speaker Model...")
@@ -25,19 +21,19 @@ classifier = EncoderClassifier.from_hparams(
 )
 
 # FUNCTIONS
-# assign speakers to spoken text, LLM generated
+# assign speakers to spoken text
 def assign_speakers(speech_file: Path, segments: list, num_speakers: int = 2) -> list:
-    """Extrahiert Stimm-Vektoren für jedes Whisper-Segment und ordnet sie Sprechern zu."""
-    # Audio via soundfile statt torchaudio laden (vermeidet torchcodec-Fehler)
+    # extract voice-vectors of each whisper segment and assign to speaker
+    # we load audio through soundfile instead of torchaudio, as torchaudio kept throwing errors on macOS
     data, sample_rate = sf.read(speech_file)
 
-    # In PyTorch Tensor umwandeln (Shape: [channels, samples])
+    # convert in pytorch tensor (Shape: [channels, samples])
     if data.ndim == 1:
         signal = torch.from_numpy(data).unsqueeze(0).float()
     else:
         signal = torch.from_numpy(data.T).float()
 
-    # Mono sicherstellen
+    # Guarantee that the signal is a mono channel signal
     if signal.shape[0] > 1:
         signal = signal.mean(dim=0, keepdim=True)
 
@@ -48,7 +44,7 @@ def assign_speakers(speech_file: Path, segments: list, num_speakers: int = 2) ->
         start_sample = int(seg["start"] * sample_rate)
         end_sample = int(seg["end"] * sample_rate)
 
-        # Ignoriere Schnipsel kürzer als 0.4 Sekunden
+        # ignore snippets shorter than 0.4 seconds
         if end_sample - start_sample < int(0.4 * sample_rate):
             seg["speaker"] = "SPEAKER_UNKNOWN"
             continue
@@ -60,7 +56,7 @@ def assign_speakers(speech_file: Path, segments: list, num_speakers: int = 2) ->
             embeddings.append(emb.squeeze().cpu().numpy())
             valid_segments.append(seg)
 
-    # Vektoren in Sprecher-Gruppen clustern
+    # Cluster speaker-groups in vectors
     if embeddings:
         X = np.array(embeddings)
         actual_clusters = min(num_speakers, len(embeddings))
@@ -73,7 +69,7 @@ def assign_speakers(speech_file: Path, segments: list, num_speakers: int = 2) ->
     return segments
 
 # transcribe audio and write to file with timestamps, return a dict that contains all spoken information
-def transcribe_audio(name : str, num_speakers : int = 2,  to_text: bool = False):
+def transcribe_audio(name : str, speakers : dict, num_speakers : int = 2,  to_text: bool = False):
     speech_file = AUDIO_DIR / (name + ".wav")
     name_json = name + "_json.json"
     speech_file_json = TEXT_DIR / name_json
@@ -98,11 +94,11 @@ def transcribe_audio(name : str, num_speakers : int = 2,  to_text: bool = False)
 
     # from dict save to txt
     if to_text:
-        transcribe_audio_save_txt(name, audio_text)
+        transcribe_audio_save_txt(name, audio_text, speakers)
 
     return audio_text
 
-# TRANSCRIPTION
+# HELPER
 # save the dict of the audio stream to json, added timestamps
 def transcribe_audio_save_json(filename : str, audio_text : dict):
     output_file_json = TEXT_DIR / filename
@@ -110,7 +106,7 @@ def transcribe_audio_save_json(filename : str, audio_text : dict):
         json.dump(audio_text, f, ensure_ascii=False, indent=4)
 
 # save the dict of the audio stream to txt, added timestamps
-def transcribe_audio_save_txt(name: str, audio_text : dict):
+def transcribe_audio_save_txt(name: str, audio_text : dict, speaker_mapping: dict):
     output_file_txt = TEXT_DIR / (name + "_text.txt")
     with open(output_file_txt, "w", encoding="utf-8") as f:
         for segment in audio_text["segments"]:
@@ -118,7 +114,7 @@ def transcribe_audio_save_txt(name: str, audio_text : dict):
             end = segment["end"]
             text = segment["text"].strip()
             speaker = segment.get("speaker", "SPEAKER_UNKNOWN")
-            display_name = SPEAKER_MAPPING.get(speaker, speaker)
+            display_name = speaker_mapping.get(speaker, speaker)
             f.write(f"[{start:.2f}s - {end:.2f}s] [{display_name}] {text}\n")
 
 # retrieve the audio stream information from an existing json file
@@ -126,7 +122,31 @@ def get_transcription_from_json(json_file : Path):
     with open(json_file, "r", encoding="utf-8") as f:
         return json.load(f)
 
+# get speakers by input, highly unstable as sequence of speaking is unknown
+def get_speakers():
+    names = []
+    number_speakers = int(input("Number of speakers (max 10 speakers): "))
+    if number_speakers > 10:
+        print("Number of speakers exceeds 10, setting number of speakers to 10!")
+        number_speakers = 10
+
+    for i in range(number_speakers):
+        real_name = input("Enter speaker name: ")
+        names.append(real_name)
+
+    speaker_mapping = {
+        f"SPEAKER_{i + 1}": f"{names[i]}" for i in range(number_speakers)
+    }
+
+    return speaker_mapping
+
+# TEST
 if __name__ == "__main__":
-    result = transcribe_audio("test_1", num_speakers=3, to_text=True)
+    # get all speakers by input
+    speakers = get_speakers()
+    for num, name in speakers.items():
+        print(f"{num}: {name}")
+    # transcribe audio, use the namee of the speakers in NAMES
+    result = transcribe_audio("test_1", speakers, num_speakers=3, to_text=True)
     print("Fertig! Transkription und Sprecherzuordnung gespeichert.")
 
