@@ -73,7 +73,7 @@ def assign_speakers(speech_file: Path, segments: list, num_speakers: int = 2) ->
 # return a dictionary of audio information
 def transcribe_audio(path : str, speakers_dict : dict, num_speakers : int = 2,  to_text: bool = False):
     speech_file = AUDIO_DIR / (path + ".wav")
-    name_json = path + "_json.json"
+    name_json = path + "_transcript.json"
     speech_file_json = TRANSCRIPTION_DIR / name_json
 
     # if file does not exist, create new transcription from audio stream
@@ -109,7 +109,7 @@ def transcribe_audio_save_json(filename : str, audio_text : dict):
 
 # save the dict of the audio stream to txt, added timestamps
 def transcribe_audio_save_txt(path: str, audio_text : dict, speaker_mapping: dict):
-    output_file_txt = TRANSCRIPTION_DIR / (path + "_text.txt")
+    output_file_txt = TRANSCRIPTION_DIR / (path + "_transcript.txt")
     with open(output_file_txt, "w", encoding="utf-8") as f:
         for segment in audio_text["segments"]:
             start = segment["start"]

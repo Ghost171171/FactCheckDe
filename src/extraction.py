@@ -2,14 +2,14 @@ from groq import Groq
 import os
 import json
 from dotenv import load_dotenv
-from transcription import TEXT_DIR
+from transcription import TEXT_DIR, TRANSCRIPTION_DIR
 
 EXTR_DIR = TEXT_DIR / "extraction"
 
 load_dotenv()
 
 # Extract information from transcribed text
-def extract_json(path_file: str):
+def extract_json(path_name: str):
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
     desc_sys = """Du bist ein Analyse-Werkzeug für transkribierte politische Reden und Debatten.
 
@@ -113,7 +113,8 @@ def extract_json(path_file: str):
         }
         """
 
-    desc_usr = get_string_from_txt(path_file)
+    path_name_trscr = f"{path_name}_transcript.txt"
+    desc_usr = get_text_from_string(path_name_trscr)
 
     response = client.chat.completions.create(
         model="openai/gpt-oss-120b",
@@ -124,20 +125,19 @@ def extract_json(path_file: str):
     )
 
     result_text = response.choices[0].message.content
-    to_file(result_text)
-    print(result_text)
+    to_file(result_text, path_name)
 
-def get_string_from_txt(file_path : str):
-    txt_path = TEXT_DIR / file_path
+def get_text_from_string(file_path : str):
+    txt_path = TRANSCRIPTION_DIR / file_path
     with open(txt_path, "r") as file:
         txt = file.read()
     return txt
 
-def to_file(conv_text):
+def to_file(conv_text, filename):
     output = json.loads(conv_text)
-    with open("output.json", "w", encoding="utf-8") as f:
+    with open(EXTR_DIR / f"{filename}_extract.json", "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=4)
 
 
 if __name__ == "__main__":
-    extract_json("test_1_text.txt")
+    extract_json("test_1")
