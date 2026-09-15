@@ -8,9 +8,9 @@ from sklearn.cluster import AgglomerativeClustering
 from speechbrain.inference.speaker import EncoderClassifier
 import soundfile as sf
 
-
 # CONSTANTS
 TEXT_DIR = Path(__file__).parent / "sample" / "text"
+TRANSCRIPTION_DIR = TEXT_DIR / "transcription"
 AUDIO_DIR = Path(__file__).parent / "sample" / "audio"
 
 # load speechbrain encoder on first boot
@@ -22,6 +22,7 @@ classifier = EncoderClassifier.from_hparams(
 
 # FUNCTIONS
 # assign speakers to spoken text
+# return segments of audio information that point to a speaker
 def assign_speakers(speech_file: Path, segments: list, num_speakers: int = 2) -> list:
     # extract voice-vectors of each whisper segment and assign to speaker
     # we load audio through soundfile instead of torchaudio, as torchaudio kept throwing errors on macOS
@@ -58,10 +59,10 @@ def assign_speakers(speech_file: Path, segments: list, num_speakers: int = 2) ->
 
     # Cluster speaker-groups in vectors
     if embeddings:
-        X = np.array(embeddings)
+        x = np.array(embeddings)
         actual_clusters = min(num_speakers, len(embeddings))
         clustering = AgglomerativeClustering(n_clusters=actual_clusters, metric="cosine", linkage="average")
-        labels = clustering.fit_predict(X)
+        labels = clustering.fit_predict(x)
 
         for seg, label in zip(valid_segments, labels):
             seg["speaker"] = f"SPEAKER_{label + 1}"
@@ -69,10 +70,11 @@ def assign_speakers(speech_file: Path, segments: list, num_speakers: int = 2) ->
     return segments
 
 # transcribe audio and write to file with timestamps, return a dict that contains all spoken information
-def transcribe_audio(name : str, speakers : dict, num_speakers : int = 2,  to_text: bool = False):
-    speech_file = AUDIO_DIR / (name + ".wav")
-    name_json = name + "_json.json"
-    speech_file_json = TEXT_DIR / name_json
+# return a dictionary of audio information
+def transcribe_audio(path : str, speakers_dict : dict, num_speakers : int = 2,  to_text: bool = False):
+    speech_file = AUDIO_DIR / (path + ".wav")
+    name_json = path + "_json.json"
+    speech_file_json = TRANSCRIPTION_DIR / name_json
 
     # if file does not exist, create new transcription from audio stream
     if not speech_file_json.is_file():
@@ -94,20 +96,20 @@ def transcribe_audio(name : str, speakers : dict, num_speakers : int = 2,  to_te
 
     # from dict save to txt
     if to_text:
-        transcribe_audio_save_txt(name, audio_text, speakers)
+        transcribe_audio_save_txt(path, audio_text, speakers_dict)
 
     return audio_text
 
 # HELPER
 # save the dict of the audio stream to json, added timestamps
 def transcribe_audio_save_json(filename : str, audio_text : dict):
-    output_file_json = TEXT_DIR / filename
+    output_file_json = TRANSCRIPTION_DIR / filename
     with open(output_file_json, "w", encoding="utf-8") as f:
         json.dump(audio_text, f, ensure_ascii=False, indent=4)
 
 # save the dict of the audio stream to txt, added timestamps
-def transcribe_audio_save_txt(name: str, audio_text : dict, speaker_mapping: dict):
-    output_file_txt = TEXT_DIR / (name + "_text.txt")
+def transcribe_audio_save_txt(path: str, audio_text : dict, speaker_mapping: dict):
+    output_file_txt = TRANSCRIPTION_DIR / (path + "_text.txt")
     with open(output_file_txt, "w", encoding="utf-8") as f:
         for segment in audio_text["segments"]:
             start = segment["start"]
@@ -118,11 +120,13 @@ def transcribe_audio_save_txt(name: str, audio_text : dict, speaker_mapping: dic
             f.write(f"[{start:.2f}s - {end:.2f}s] [{display_name}] {text}\n")
 
 # retrieve the audio stream information from an existing json file
+# return a dictionary containing the audio information
 def get_transcription_from_json(json_file : Path):
     with open(json_file, "r", encoding="utf-8") as f:
         return json.load(f)
 
 # get speakers by input, highly unstable as sequence of speaking is unknown
+# return a dictionary of speakers and the number of speakers
 def get_speakers():
     names = []
     number_speakers = int(input("Number of speakers (max 10 speakers): "))
@@ -138,15 +142,5 @@ def get_speakers():
         f"SPEAKER_{i + 1}": f"{names[i]}" for i in range(number_speakers)
     }
 
-    return speaker_mapping
-
-# TEST
-if __name__ == "__main__":
-    # get all speakers by input
-    speakers = get_speakers()
-    for num, name in speakers.items():
-        print(f"{num}: {name}")
-    # transcribe audio, use the namee of the speakers in NAMES
-    result = transcribe_audio("test_1", speakers, num_speakers=3, to_text=True)
-    print("Fertig! Transkription und Sprecherzuordnung gespeichert.")
+    return speaker_mapping, number_speakers
 
