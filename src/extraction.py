@@ -1,16 +1,26 @@
 from groq import Groq
+from pathlib import Path
 import os
 import json
 from dotenv import load_dotenv
-from transcription import TEXT_DIR, TRANSCRIPTION_DIR
 
+TEXT_DIR = Path(__file__).parent / "sample" / "text"
+TRANSCRIPTION_DIR = TEXT_DIR / "transcription"
 EXTR_DIR = TEXT_DIR / "extraction"
 
+# load environment variables
 load_dotenv()
 
+# TODO use datastruct instead of using file
 # Extract information from transcribed text
-def extract_json(path_name: str):
+def extract_json(path_name: str, transcribed_audio: str):
+    extract_path = EXTR_DIR / f"{path_name}_extract.json"
+
+    if extract_path.is_file():
+        return get_transcription_from_json(extract_path)
+
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    # set system prompt
     desc_sys = """Du bist ein Analyse-Werkzeug für transkribierte politische Reden und Debatten.
 
         ## Input-Format
@@ -113,9 +123,10 @@ def extract_json(path_name: str):
         }
         """
 
-    path_name_trscr = f"{path_name}_transcript.txt"
-    desc_usr = get_text_from_string(path_name_trscr)
+    # set transcribed audio as user prompt for context
+    desc_usr = transcribed_audio
 
+    # get response, add system prompt and user prompt
     response = client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=[
@@ -125,19 +136,24 @@ def extract_json(path_name: str):
     )
 
     result_text = response.choices[0].message.content
-    to_file(result_text, path_name)
 
-def get_text_from_string(file_path : str):
-    txt_path = TRANSCRIPTION_DIR / file_path
-    with open(txt_path, "r") as file:
-        txt = file.read()
-    return txt
+    try:
+        parsed_data = json.loads(result_text)
+    except json.decoder.JSONDecodeError as e:
+        print(f"Fehler beim Parsen der LLM-Antwort: {e}")
+        print(f"Rohantwort war: {result_text}")
+        raise
 
-def to_file(conv_text, filename):
-    output = json.loads(conv_text)
+    to_file(parsed_data, path_name)  # jetzt: bereits geparstes Dict übergeben
+    return parsed_data
+
+# convert the response-string to a json file
+def to_file(data: dict, filename: str):
+    """Speichert ein bereits geparstes Dict als JSON-Datei."""
     with open(EXTR_DIR / f"{filename}_extract.json", "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=4)
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-
-if __name__ == "__main__":
-    extract_json("test_1")
+def get_transcription_from_json(extract_path):
+    with open(extract_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data

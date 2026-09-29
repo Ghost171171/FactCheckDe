@@ -71,7 +71,7 @@ def assign_speakers(speech_file: Path, segments: list, num_speakers: int = 2) ->
 
 # transcribe audio and write to file with timestamps, return a dict that contains all spoken information
 # return a dictionary of audio information
-def transcribe_audio(path : str, speakers_dict : dict, num_speakers : int = 2,  to_text: bool = False):
+def transcribe_audio(path : str, speakers_dict : dict, num_speakers : int = 2):
     speech_file = AUDIO_DIR / (path + ".wav")
     name_json = path + "_transcript.json"
     speech_file_json = TRANSCRIPTION_DIR / name_json
@@ -95,10 +95,7 @@ def transcribe_audio(path : str, speakers_dict : dict, num_speakers : int = 2,  
         audio_text = get_transcription_from_json(speech_file_json)
 
     # from dict save to txt
-    if to_text:
-        transcribe_audio_save_txt(path, audio_text, speakers_dict)
-
-    return audio_text
+    return transcribe_audio_save_txt(path, audio_text, speakers_dict)
 
 # HELPER
 # save the dict of the audio stream to json, added timestamps
@@ -118,6 +115,9 @@ def transcribe_audio_save_txt(path: str, audio_text : dict, speaker_mapping: dic
             speaker = segment.get("speaker", "SPEAKER_UNKNOWN")
             display_name = speaker_mapping.get(speaker, speaker)
             f.write(f"[{start:.2f}s - {end:.2f}s] [{display_name}] {text}\n")
+    # TODO save in string or, datastruct for later use
+    with open(output_file_txt, "r", encoding="utf-8") as f:
+        return f.read()
 
 # retrieve the audio stream information from an existing json file
 # return a dictionary containing the audio information
